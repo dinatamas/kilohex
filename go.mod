@@ -1,4 +1,4 @@
-module github.com/dinatamas/kilogo
+module github.com/dinatamas/kilohex
 
 go 1.18
 

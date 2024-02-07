@@ -18,7 +18,7 @@ func _main() int {
     filename := flag.Arg(0)
 
     if filename == "" {
-        log.Println("usage: kilogo <filename>")
+        log.Println("usage: kilohex <filename>")
         return 1
     }
 

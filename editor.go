@@ -3,7 +3,7 @@ package main
 import (
     "strings"
 
-    "github.com/dinatamas/kilogo/terminal"
+    "github.com/dinatamas/kilohex/terminal"
 )
 
 const (

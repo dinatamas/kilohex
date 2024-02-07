@@ -60,7 +60,6 @@ const (
 )
 
 // ANSI input escape sequences emitted by keys.
-// TODO: There are more edge cases, add them here!
 const (
     KeyF1     = "\x1b\x5b\x59"
     KeyF2     = "\x1b\x5b\x60"
