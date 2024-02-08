@@ -34,7 +34,7 @@ func _main() int {
 
     // Run the editor.
     editor := NewEditor(filename, buffer)
-    defer editor.Restore()
+    defer editor.Close()
     buffer, err = editor.Run()
     if err != nil {
         log.Print("editor error: ", err)

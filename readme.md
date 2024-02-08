@@ -24,6 +24,7 @@ Tasklist
 
 **Long term:**
 
+- [ ] Introduce hexdump command line arguments.
 - [ ] Introduce binary display modes.
 - [ ] Support bit operations.
 

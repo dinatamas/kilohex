@@ -8,10 +8,11 @@ import (
 )
 
 const (
-    STATE_CLEAN = 0
-    STATE_DIRTY = 1
+    STATE_CLEAN  = 0
+    STATE_DIRTY  = 1
     STATE_SAVING = 2
     STATE_EXITED = 3
+    STATE_ERROR  = 4
 )
 
 type Editor struct {
@@ -22,10 +23,62 @@ type Editor struct {
     W          terminal.Window
     Cy, Cx     int              // Cursor offset compared to screen.
     Oy, Ox     int              // Screen offset compared to file.
+    Error      error
 }
 
-func (e *Editor) Restore() {
+func NewEditor(filename string, buffer []byte) Editor {
+    // Represent the buffer as rows of hexadecimal strings.
+    hexbuf := hex.EncodeToString(buffer)
+    var lines []string
+    for i := 0; i < len(hexbuf); i += 32 {
+        j := i + 32
+        if j > len(hexbuf) { j = len(hexbuf) }
+        lines = append(lines, hexbuf[i:j])
+    }
+
+    // Instantiate the window and the editor.
+    window := terminal.NewWindow()
+    editor := Editor{
+        State: STATE_CLEAN,
+        Filename: filename,
+        Buffer: buffer,
+        Rows: lines,
+        W: window,
+        Cy: 0, Cx: 0,
+        Oy: 0, Ox: 0,
+    }
+    return editor
+}
+
+func (e *Editor) Close() {
     e.W.Restore()
+}
+
+func (e *Editor) Run() ([]byte, error) {
+    // Infinite event loop.
+    for {
+        if e.State == STATE_EXITED { return e.Buffer, nil }
+        if e.State == STATE_ERROR  { return []byte{}, e.Error }
+
+        e.Draw()
+        e.HandleKey(terminal.ReadKey())
+    }
+}
+
+func (e *Editor) Save() {
+    // Reconstruct the buffer from the hex strings.
+    hexbuf := strings.Join(e.Rows, "")
+    buffer, err := hex.DecodeString(hexbuf)
+
+    if err == nil {
+        // Save successful.
+        e.Buffer = buffer
+        e.State = STATE_CLEAN
+    } else {
+        // Save failed.
+        e.Error = err
+        e.State = STATE_ERROR
+    }
 }
 
 func (e *Editor) Draw() {
@@ -46,10 +99,14 @@ func (e *Editor) Draw() {
     // Draw status bar.
     status := e.Filename
     switch e.State {
-    case STATE_DIRTY:
-        status += "*"
-    case STATE_SAVING:
-        status += " - Save?"
+        case STATE_DIRTY:
+            status += "*"
+
+        case STATE_ERROR:
+            status += "!"
+
+        case STATE_SAVING:
+            status += " - Save?"
     }
     status += strings.Repeat(" ", e.W.W - len(status))
     e.W.PrintAt(terminal.AnsiInverse + status + terminal.AnsiInverseReset, e.W.H, 0)
@@ -58,7 +115,44 @@ func (e *Editor) Draw() {
     e.W.Flush()
 }
 
-// Helper function for HandleKey to avoid code duplication.
+func (e *Editor) HandleKey(key terminal.Key) {
+    switch e.State {
+        case STATE_CLEAN:
+            switch key.Value {
+                case terminal.KeyCtrlC:
+                    e.State = STATE_EXITED
+
+                default:
+                    e.handleEditorKey(key)
+            }
+
+        case STATE_DIRTY:
+            switch key.Value {
+                case terminal.KeyCtrlC:
+                    e.State = STATE_SAVING
+
+                case terminal.KeyCtrlS:
+                    e.Save()
+
+                default:
+                    e.handleEditorKey(key)
+            }
+
+        case STATE_SAVING:
+            switch key.Value {
+                case terminal.KeyCtrlC:
+                    e.State = STATE_EXITED
+
+                case terminal.KeyEsc:
+                    e.State = STATE_DIRTY
+
+                case terminal.KeyEnter:
+                    e.Save()
+                    e.State = STATE_EXITED
+            }
+    }
+}
+
 func (e *Editor) handleEditorKey(key terminal.Key) {
     if key.Type == terminal.KEY_RUNE {
         e.State = STATE_DIRTY
@@ -66,144 +160,90 @@ func (e *Editor) handleEditorKey(key terminal.Key) {
         e.Cx++
     } else {
         switch key.Value {
-        case terminal.KeyUp:
-            if e.Cy > 0 {
-                e.Cy--
-                if e.Cx > len(e.Rows[e.Cy]) {
+            case terminal.KeyUp:
+                if e.Cy > 0 {
+                    e.Cy--
+                    if e.Cx > len(e.Rows[e.Cy]) {
+                        e.Cx = len(e.Rows[e.Cy])
+                    }
+                }
+
+            case terminal.KeyDown:
+                if e.Cy < len(e.Rows) - 1 {
+                    e.Cy++
+                    if e.Cx > len(e.Rows[e.Cy]) {
+                        e.Cx = len(e.Rows[e.Cy])
+                    }
+                }
+
+            case terminal.KeyRight:
+                if e.Cx < len(e.Rows[e.Cy]) {
+                    e.Cx++
+                }
+
+            case terminal.KeyLeft:
+                if e.Cx > 0 {
+                    e.Cx--
+                }
+
+            case terminal.KeyBackspace, terminal.Ascii_BS:
+                if e.Cx > 0 {
+                    e.State = STATE_DIRTY
+                    e.Rows[e.Cy] = e.Rows[e.Cy][:e.Cx-1] + e.Rows[e.Cy][e.Cx:]
+                    e.Cx--
+                } else if len(e.Rows[e.Cy]) == 0 && e.Cy > 0 {
+                    e.State = STATE_DIRTY
+                    e.Rows = append(e.Rows[:e.Cy], e.Rows[e.Cy+1:]...)
+                    e.Cy--
                     e.Cx = len(e.Rows[e.Cy])
                 }
-            }
-        case terminal.KeyDown:
-            if e.Cy < len(e.Rows) - 1 {
+
+            case terminal.KeyEnter:
+                e.State = STATE_DIRTY
+                e.Rows = append(e.Rows[:e.Cy+1], e.Rows[e.Cy:]...)
+                e.Rows[e.Cy+1] = e.Rows[e.Cy][e.Cx:]
+                e.Rows[e.Cy] = e.Rows[e.Cy][:e.Cx]
                 e.Cy++
-                if e.Cx > len(e.Rows[e.Cy]) {
-                    e.Cx = len(e.Rows[e.Cy])
+                e.Cx = 0
+
+            case terminal.KeyDelete:
+                if e.Cx == len(e.Rows[e.Cy]) && e.Cy < len(e.Rows) - 1 {
+                    e.State = STATE_DIRTY
+                    e.Rows[e.Cy] = e.Rows[e.Cy] + e.Rows[e.Cy+1]
+                    e.Rows = append(e.Rows[:e.Cy+1], e.Rows[e.Cy+2:]...)
+                } else if e.Cx < len(e.Rows[e.Cy]) {
+                    e.State = STATE_DIRTY
+                    e.Rows[e.Cy] = e.Rows[e.Cy][:e.Cx] + e.Rows[e.Cy][e.Cx+1:]
                 }
-            }
-        case terminal.KeyRight:
-            if e.Cx < len(e.Rows[e.Cy]) {
-                e.Cx++
-            }
-        case terminal.KeyLeft:
-            if e.Cx > 0 {
-                e.Cx--
-            }
-        case terminal.KeyBackspace, terminal.Ascii_BS:
-            if e.Cx > 0 {
-                e.State = STATE_DIRTY
-                e.Rows[e.Cy] = e.Rows[e.Cy][:e.Cx-1] + e.Rows[e.Cy][e.Cx:]
-                e.Cx--
-            } else if len(e.Rows[e.Cy]) == 0 && e.Cy > 0 {
-                e.State = STATE_DIRTY
-                e.Rows = append(e.Rows[:e.Cy], e.Rows[e.Cy+1:]...)
-                e.Cy--
+
+            case terminal.KeyHome:
+                e.Cx = 0
+
+            case terminal.KeyEnd:
                 e.Cx = len(e.Rows[e.Cy])
-            }
-        case terminal.KeyEnter:
-            e.State = STATE_DIRTY
-            e.Rows = append(e.Rows[:e.Cy+1], e.Rows[e.Cy:]...)
-            e.Rows[e.Cy+1] = e.Rows[e.Cy][e.Cx:]
-            e.Rows[e.Cy] = e.Rows[e.Cy][:e.Cx]
-            e.Cy++
-            e.Cx = 0
-        case terminal.KeyDelete:
-            if e.Cx == len(e.Rows[e.Cy]) && e.Cy < len(e.Rows) - 1 {
-                e.State = STATE_DIRTY
-                e.Rows[e.Cy] = e.Rows[e.Cy] + e.Rows[e.Cy+1]
-                e.Rows = append(e.Rows[:e.Cy+1], e.Rows[e.Cy+2:]...)
-            } else if e.Cx < len(e.Rows[e.Cy]) {
-                e.State = STATE_DIRTY
-                e.Rows[e.Cy] = e.Rows[e.Cy][:e.Cx] + e.Rows[e.Cy][e.Cx+1:]
-            }
-        case terminal.KeyHome:
-            e.Cx = 0
-        case terminal.KeyEnd:
-            e.Cx = len(e.Rows[e.Cy])
-        case terminal.KeyTab:
-            break // TODO
-        case terminal.KeyPgUp:
-            break // TODO
-        case terminal.KeyPgDn:
-            break // TODO
+
+            case terminal.KeyTab:
+                break // TODO
+
+            case terminal.KeyPgUp:
+                break // TODO
+
+            case terminal.KeyPgDn:
+                break // TODO
         }
     }
-    // Move offsets if required.
+
+    // Adjust vertical offsets.
     if e.Cy < e.Oy {
         e.Oy = e.Cy
     } else if e.Cy > e.Oy + e.W.H - 2 {
         e.Oy = e.Cy - e.W.H + 2
     }
+
+    // Adjust horizontal offsets.
     if e.Cx < e.Ox {
         e.Ox = e.Cx
     } else if e.Cx > e.Ox + e.W.W - 1 {
         e.Ox = e.Cx - e.W.W + 1
     }
-}
-
-func (e *Editor) HandleKey(key terminal.Key) {
-    switch e.State {
-    case STATE_CLEAN:
-        switch key.Value {
-        case terminal.KeyCtrlC:
-            e.State = STATE_EXITED
-        default:
-            e.handleEditorKey(key)
-        }
-    case STATE_DIRTY:
-        switch key.Value {
-        case terminal.KeyCtrlC:
-            e.State = STATE_SAVING
-        case terminal.KeyCtrlS:
-            e.Save()
-        default:
-            e.handleEditorKey(key)
-        }
-    case STATE_SAVING:
-        switch key.Value {
-        case terminal.KeyCtrlC:
-            e.State = STATE_EXITED
-        case terminal.KeyEsc:
-            e.State = STATE_DIRTY
-        case terminal.KeyEnter:
-            e.Save()
-            e.State = STATE_EXITED
-        }
-    }
-}
-
-func NewEditor(filename string, buffer []byte) Editor {
-    hexbuf := hex.EncodeToString(buffer)
-    var lines []string
-    for i := 0; i < len(hexbuf); i += 80 {
-        j := i + 80
-        if j > len(hexbuf) { j = len(hexbuf) }
-        lines = append(lines, hexbuf[i:j])
-    }
-    window := terminal.NewWindow()
-    editor := Editor{
-        State: STATE_CLEAN,
-        Filename: filename,
-        Buffer: buffer,
-        Rows: lines,
-        W: window,
-        Cy: 0, Cx: 0,
-        Oy: 0, Ox: 0,
-    }
-    return editor
-}
-
-func (e *Editor) Run() []byte {
-    for e.State != STATE_EXITED {
-        e.Draw()
-        e.HandleKey(terminal.ReadKey())
-    }
-    return e.Buffer
-}
-
-func (e *Editor) Save() {
-    e.State = STATE_CLEAN
-    hexbuf := strings.Join(e.Rows, "")
-    buffer, err := hex.DecodeString(hexbuf)
-    if err != nil { panic(err) }
-    e.Buffer = buffer
 }
