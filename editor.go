@@ -2,6 +2,7 @@ package main
 
 import (
     "encoding/hex"
+    "fmt"
     "strings"
 
     "github.com/dinatamas/kilohex/terminal"
@@ -19,7 +20,7 @@ type Editor struct {
     State      int
     Filename   string
     Buffer     []byte           // Saved continuous file content.
-    Rows       []string         // Unsaved displayed editor lines.
+    Rows       []string         // Unsaved editor lines.
     W          terminal.Window
     Cy, Cx     int              // Cursor offset compared to screen.
     Oy, Ox     int              // Screen offset compared to file.
@@ -87,13 +88,55 @@ func (e *Editor) Draw() {
 
     // Draw rows.
     for i := 0; i < e.W.H - 1; i++ {
-        if e.Oy + i >= len(e.Rows) { break; }
-        if e.Ox > len(e.Rows[e.Oy + i]) { continue; }
+
+        if e.Oy + i >= len(e.Rows) {
+            break;
+        }
+        if e.Ox > len(e.Rows[e.Oy + i]) {
+            continue;
+        }
+
+        // Create the displayed row with left and right sides.
+        hexpos := fmt.Sprintf("%08x", (e.Oy + i) * 16)
+        content := ""
+        for j := 0; j < 32; j += 1 {
+            if j < len(e.Rows[e.Oy + i]) {
+                content += string(e.Rows[e.Oy + i][j])
+            } else {
+                content += " "
+            }
+            if j % 2 == 1 {
+                content += " "
+            }
+            if j == 15 {
+                content += " "
+            }
+        }
+        decoded := ""
+
+        loLine := hexpos + "  " + content + " |" + decoded + "|\r\n"
+        e.W.Print(loLine)
+        continue
+
         lastX := e.Ox + e.W.W
         if lastX > len(e.Rows[e.Oy + i]) {
             lastX = len(e.Rows[e.Oy + i])
         }
-        e.W.Print(e.Rows[e.Oy + i][e.Ox:lastX] + "\r\n")
+
+        octets := e.Rows[e.Oy + i][e.Ox:lastX]
+        for j := e.Ox; j < lastX; j += 1 {
+            if j > 0 && j % 2 == 0 {
+                e.W.Print(" ")
+            }
+        }
+
+        var bytes []string
+        for j := e.Ox; j < lastX; j += 2 {
+            k := j + 2
+            if k > lastX { k = lastX }
+            bytes = append(bytes, octets[j:k])
+        }
+        e.W.Print(strings.Join(bytes, " ") + "\r\n")
     }
 
     // Draw status bar.

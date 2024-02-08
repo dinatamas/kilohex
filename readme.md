@@ -15,6 +15,7 @@ Tasklist
 - [ ] Display current byte position in the current row.
 - [ ] Color different byte classes.
 - [ ] Allow only hex character changes.
+- [ ] Utils: `SplitInto()`
 
 **Medium term:**
 
