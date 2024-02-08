@@ -9,7 +9,7 @@ import (
 type TerminalConfig *x.Termios
 
 func GetConfig() TerminalConfig {
-    termios, _ := x.IoctlGetTermios(x.Stdin, x.TCGETS)
+    termios, _ := x.IoctlGetTermios(x.Stdin, TIOGET)
     return termios
 }
 
@@ -19,14 +19,14 @@ func GetSize() (int, int) {
 }
 
 func SetConfig(config TerminalConfig) {
-    x.IoctlSetTermios(x.Stdin, x.TCSETSF, config)
+    x.IoctlSetTermios(x.Stdin, TIOSET, config)
 }
 
 func SetRawMode() {
-    termios, _ := x.IoctlGetTermios(x.Stdin, x.TCGETS)
+    termios, _ := x.IoctlGetTermios(x.Stdin, TIOGET)
     termios.Lflag = termios.Lflag &^ (x.ECHO | x.ICANON | x.ISIG | x.IEXTEN)
     termios.Iflag = termios.Iflag &^ (x.IXON | x.ICRNL | x.BRKINT | x.INPCK | x.ISTRIP)
     termios.Oflag = termios.Oflag &^ x.OPOST
     termios.Cflag = termios.Cflag | x.CS8
-    x.IoctlSetTermios(x.Stdin, x.TCSETSF, termios)
+    x.IoctlSetTermios(x.Stdin, TIOSET, termios)
 }

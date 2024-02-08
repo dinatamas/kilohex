@@ -11,5 +11,6 @@ References
 - [kilo explained](  https://viewsourcecode.org/snaptoken/kilo/)
 - [termbox-go](      https://github.com/nsf/termbox-go)
 - [go term](         https://pkg.go.dev/golang.org/x/term)
+- [docker term](     https://github.com/moby/term/)
 - [ansi escape](     https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797)
 - [xterm ctlseqs](   https://invisible-island.net/xterm/ctlseqs/ctlseqs.html)
