@@ -1,6 +1,7 @@
 package main
 
 import (
+    "encoding/hex"
     "strings"
 
     "github.com/dinatamas/kilohex/terminal"
@@ -14,14 +15,13 @@ const (
 )
 
 type Editor struct {
-    State    int
-    Filename string
-    Buffer   string
-    Rows     []string
-    W        terminal.Window
-    Cy, Cx   int
-    Oy, Ox   int
-    LineEnding string
+    State      int
+    Filename   string
+    Buffer     []byte           // Saved continuous file content.
+    Rows       []string         // Unsaved displayed editor lines.
+    W          terminal.Window
+    Cy, Cx     int              // Cursor offset compared to screen.
+    Oy, Ox     int              // Screen offset compared to file.
 }
 
 func (e *Editor) Restore() {
@@ -171,19 +171,14 @@ func (e *Editor) HandleKey(key terminal.Key) {
     }
 }
 
-func NewEditor(filename string, buffer string) Editor {
-    lineEnding := "\n"
-lineEndingLoop:
-    for _, c := range buffer {
-        switch c {
-        case '\r':
-            lineEnding = "\r"
-            break lineEndingLoop
-        case '\n':
-            break lineEndingLoop
-        }
+func NewEditor(filename string, buffer []byte) Editor {
+    hexbuf := hex.EncodeToString(buffer)
+    var lines []string
+    for i := 0; i < len(hexbuf); i += 80 {
+        j := i + 80
+        if j > len(hexbuf) { j = len(hexbuf) }
+        lines = append(lines, hexbuf[i:j])
     }
-    lines := strings.Split(buffer, lineEnding)
     window := terminal.NewWindow()
     editor := Editor{
         State: STATE_CLEAN,
@@ -193,12 +188,11 @@ lineEndingLoop:
         W: window,
         Cy: 0, Cx: 0,
         Oy: 0, Ox: 0,
-        LineEnding: lineEnding,
     }
     return editor
 }
 
-func (e *Editor) Run() string {
+func (e *Editor) Run() []byte {
     for e.State != STATE_EXITED {
         e.Draw()
         e.HandleKey(terminal.ReadKey())
@@ -208,5 +202,8 @@ func (e *Editor) Run() string {
 
 func (e *Editor) Save() {
     e.State = STATE_CLEAN
-    e.Buffer = strings.Join(e.Rows, e.LineEnding)
+    hexbuf := strings.Join(e.Rows, "")
+    buffer, err := hex.DecodeString(hexbuf)
+    if err != nil { panic(err) }
+    e.Buffer = buffer
 }
