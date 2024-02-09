@@ -25,6 +25,7 @@ Tasklist
 - [ ] Display column offsets in hex in the top row.
 - [ ] Support byte deletion.
 - [ ] Support byte insertion.
+- [ ] Advanced controls: PgUp / PgDn, go to line.
 
 **Long term:**
 
@@ -32,10 +33,13 @@ Tasklist
 - [ ] Introduce binary display modes.
 - [ ] Support bit operations.
 - [ ] Full Unicode support (graphemes instead of runes).
+- [ ] Decoded charset: decide based on file type.
+- [ ] Decoded charset: make it runtime switchable.
 
 **Bugs:**
 
 - [ ] After resizing the left X-offset is not corrected.
+- [ ] Handle empty and short files.
 
 References
 ----------
@@ -50,5 +54,5 @@ References
 - [xterm ctlseqs](       https://invisible-island.net/xterm/ctlseqs/ctlseqs.html)
 - [hexyl](               https://github.com/sharkdp/hexyl)
 - [text normalization](  https://go.dev/blog/normalization)
-- [Unicode problems](    https://stackoverflow.com/a/12668840)
+- [unicode problems](    https://stackoverflow.com/a/12668840)
 - [uniseg](              https://github.com/rivo/uniseg)
