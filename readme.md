@@ -32,16 +32,24 @@ Tasklist
 - [ ] Introduce hexdump command line arguments.
 - [ ] Introduce binary display modes.
 - [ ] Support bit operations.
+- [ ] Full Unicode support (graphemes instead of runes).
+
+**Bugs:**
+
+- [ ] After resizing the left X-offset is not corrected.
 
 References
 ----------
 
-- [kilo](            https://github.com/antirez/kilo)
-- [gokilo](          https://github.com/srinathh/gokilo)
-- [kilo explained](  https://viewsourcecode.org/snaptoken/kilo/)
-- [termbox-go](      https://github.com/nsf/termbox-go)
-- [go term](         https://pkg.go.dev/golang.org/x/term)
-- [docker term](     https://github.com/moby/term/)
-- [ansi escape](     https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797)
-- [xterm ctlseqs](   https://invisible-island.net/xterm/ctlseqs/ctlseqs.html)
-- [hexyl](           https://github.com/sharkdp/hexyl)
+- [kilo](                https://github.com/antirez/kilo)
+- [gokilo](              https://github.com/srinathh/gokilo)
+- [kilo explained](      https://viewsourcecode.org/snaptoken/kilo/)
+- [termbox-go](          https://github.com/nsf/termbox-go)
+- [go term](             https://pkg.go.dev/golang.org/x/term)
+- [docker term](         https://github.com/moby/term/)
+- [ansi escape](         https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797)
+- [xterm ctlseqs](       https://invisible-island.net/xterm/ctlseqs/ctlseqs.html)
+- [hexyl](               https://github.com/sharkdp/hexyl)
+- [text normalization](  https://go.dev/blog/normalization)
+- [Unicode problems](    https://stackoverflow.com/a/12668840)
+- [uniseg](              https://github.com/rivo/uniseg)
