@@ -6,15 +6,17 @@ Modified version of the Kilo text editor - as a hex editor - written in Go!
 Tasklist
 --------
 
+**Missing:**
+
+- [ ] Display ASCII representation on the right side.
+- [ ] Implement byte editing.
+- [ ] Reintroduce file saving.
+
 **Short term:**
 
 - [ ] Preserve original file permissions when writing.
-- [ ] Add whitespace between bytes.
-- [ ] Display ASCII representation on the right side.
-- [ ] Display row offset in hex on the left side.
 - [ ] Display current byte position in the current row.
 - [ ] Color different byte classes.
-- [ ] Allow only hex character changes.
 - [ ] Utils: `SplitInto()`
 
 **Medium term:**

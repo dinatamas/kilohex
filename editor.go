@@ -1,7 +1,6 @@
 package main
 
 import (
-    "encoding/hex"
     "fmt"
     "strings"
 
@@ -13,37 +12,31 @@ const (
     STATE_DIRTY  = 1
     STATE_SAVING = 2
     STATE_EXITED = 3
-    STATE_ERROR  = 4
 )
+
+//===================================================================
+//
+// External Editor methods.
+//
+//===================================================================
 
 type Editor struct {
     State      int
     Filename   string
-    Buffer     []byte           // Saved continuous file content.
-    Rows       []string         // Unsaved editor lines.
+    Buffer     []byte
     W          terminal.Window
-    Cy, Cx     int              // Cursor offset compared to screen.
-    Oy, Ox     int              // Screen offset compared to file.
+    Cy, Cx     int
+    Oy, Ox     int
     Error      error
 }
 
 func NewEditor(filename string, buffer []byte) Editor {
-    // Represent the buffer as rows of hexadecimal strings.
-    hexbuf := hex.EncodeToString(buffer)
-    var lines []string
-    for i := 0; i < len(hexbuf); i += 32 {
-        j := i + 32
-        if j > len(hexbuf) { j = len(hexbuf) }
-        lines = append(lines, hexbuf[i:j])
-    }
-
     // Instantiate the window and the editor.
     window := terminal.NewWindow()
     editor := Editor{
         State: STATE_CLEAN,
         Filename: filename,
         Buffer: buffer,
-        Rows: lines,
         W: window,
         Cy: 0, Cx: 0,
         Oy: 0, Ox: 0,
@@ -59,107 +52,108 @@ func (e *Editor) Run() ([]byte, error) {
     // Infinite event loop.
     for {
         if e.State == STATE_EXITED { return e.Buffer, nil }
-        if e.State == STATE_ERROR  { return []byte{}, e.Error }
 
         e.Draw()
         e.HandleKey(terminal.ReadKey())
     }
 }
 
-func (e *Editor) Save() {
-    // Reconstruct the buffer from the hex strings.
-    hexbuf := strings.Join(e.Rows, "")
-    buffer, err := hex.DecodeString(hexbuf)
+func (e *Editor) Save() {}
 
-    if err == nil {
-        // Save successful.
-        e.Buffer = buffer
-        e.State = STATE_CLEAN
-    } else {
-        // Save failed.
-        e.Error = err
-        e.State = STATE_ERROR
-    }
-}
+//===================================================================
+//
+// Physical and logical calculated cursor positions.
+//
+//===================================================================
+
+// Logical cursor Y-position (relative to buffer).
+func (e *Editor) lCy() int { return e.Cy }
+// Logical cursor X-position (relative to logical line).
+func (e *Editor) lCx() int { return 10 + e.Cx * 3 + (e.Cx / 8) }
+
+// Physical cursor Y-position (relative to terminal).
+func (e *Editor) tCy() int { return e.lCy() - e.Oy }
+// Phyiscal cursor X-position (relative to terminal).
+func (e *Editor) tCx() int { return e.lCx() - e.Ox }
+
+//===================================================================
+//
+// Physical and logical boundaries for the displayed content.
+//
+//===================================================================
+
+// idx of first / last+1 physical row of content area (relative to terminal)
+func (e *Editor) tMinY() int { return 0 }
+func (e *Editor) tMaxY() int { return e.W.H - 1 }
+// idx of first / last+1 line in the entire buffer (relative to buffer)
+func (e *Editor) bMinY() int { return 0 }
+func (e *Editor) bMaxY() int { return (len(e.Buffer) + 16 - 1) / 16 }
+// idx of first / last+1 logical line in content area (relative to buffer)
+func (e *Editor) lMinY() int { return e.Oy - e.tMinY() }
+func (e *Editor) lMaxY() int { return min(e.lMinY() + e.tMaxY(), e.bMaxY()) }
+
+// idx of first / last+1 physical col of content area (relative to terminal)
+func (e *Editor) tMinX(ly int) int { return 0 }
+func (e *Editor) tMaxX(ly int) int { return e.W.W }
+// idx of first / last+1 byte in the logical line (relative to logical line)
+func (e *Editor) bMinX(ly int) int { return 0 }
+func (e *Editor) bMaxX(ly int) int { return min(len(e.Buffer) - ly * 16, 16) }
+// idx of first / last+1 byte in content area (relative to logical line)
+func (e *Editor) lMinX(ly int) int { return e.Ox - e.tMinX(ly) }
+func (e *Editor) lMaxX(ly int) int { return min(e.lMinX(ly) + e.tMaxX(ly), 78) }
+
+//===================================================================
+//
+// Internal Editor methods.
+//
+//===================================================================
 
 func (e *Editor) Draw() {
     e.W.DetectResize()
     e.W.Clear()
 
-    // Draw rows.
-    for i := 0; i < e.W.H - 1; i++ {
+    // Iterate each logical line with content.
+    for ly := e.lMinY(); ly < e.lMaxY(); ly++ {
+        bytes := e.Buffer[ly * 16 + e.bMinX(ly):ly * 16 + e.bMaxX(ly)]
 
-        if e.Oy + i >= len(e.Rows) {
-            break;
+        // Construct the logical content line.
+        var loLine, offset, encoded, decoded string
+        offset = fmt.Sprintf("%08x", ly * 16)
+        for i, b := range bytes {
+            encoded += fmt.Sprintf("%02x ", b)
+            if i == 7 { encoded += " " }
         }
-        if e.Ox > len(e.Rows[e.Oy + i]) {
-            continue;
-        }
+        encoded = fmt.Sprintf("%-49s", encoded)
+        decoded = "................"
+        loLine = offset + "  " + encoded + " |" + decoded + "|"
 
-        // Create the displayed row with left and right sides.
-        hexpos := fmt.Sprintf("%08x", (e.Oy + i) * 16)
-        content := ""
-        for j := 0; j < 32; j += 1 {
-            if j < len(e.Rows[e.Oy + i]) {
-                content += string(e.Rows[e.Oy + i][j])
-            } else {
-                content += " "
-            }
-            if j % 2 == 1 {
-                content += " "
-            }
-            if j == 15 {
-                content += " "
-            }
-        }
-        decoded := ""
-
-        loLine := hexpos + "  " + content + " |" + decoded + "|\r\n"
-        e.W.Print(loLine)
-        continue
-
-        lastX := e.Ox + e.W.W
-        if lastX > len(e.Rows[e.Oy + i]) {
-            lastX = len(e.Rows[e.Oy + i])
-        }
-
-        octets := e.Rows[e.Oy + i][e.Ox:lastX]
-        for j := e.Ox; j < lastX; j += 1 {
-            if j > 0 && j % 2 == 0 {
-                e.W.Print(" ")
-            }
-        }
-
-        var bytes []string
-        for j := e.Ox; j < lastX; j += 2 {
-            k := j + 2
-            if k > lastX { k = lastX }
-            bytes = append(bytes, octets[j:k])
-        }
-        e.W.Print(strings.Join(bytes, " ") + "\r\n")
+        // Construct the physical displayed line.
+        phLine := loLine[e.Ox:e.lMaxX(ly)]
+        e.W.Print(phLine + "\r\n")
     }
 
     // Draw status bar.
     status := e.Filename
     switch e.State {
+
         case STATE_DIRTY:
             status += "*"
-
-        case STATE_ERROR:
-            status += "!"
 
         case STATE_SAVING:
             status += " - Save?"
     }
-    status += strings.Repeat(" ", e.W.W - len(status))
-    e.W.PrintAt(terminal.AnsiInverse + status + terminal.AnsiInverseReset, e.W.H, 0)
+    if e.W.W > len(status) {
+      status += strings.Repeat(" ", e.W.W - len(status))
+    }
+    e.W.PrintAt(terminal.AnsiInverse + status[0:e.W.W] + terminal.AnsiInverseReset, e.W.H, 0)
 
-    e.W.SetCursorPosition(e.Cy - e.Oy, e.Cx)
+    e.W.SetCursorPosition(e.tCy(), e.tCx())
     e.W.Flush()
 }
 
 func (e *Editor) HandleKey(key terminal.Key) {
     switch e.State {
+
         case STATE_CLEAN:
             switch key.Value {
                 case terminal.KeyCtrlC:
@@ -198,95 +192,58 @@ func (e *Editor) HandleKey(key terminal.Key) {
 
 func (e *Editor) handleEditorKey(key terminal.Key) {
     if key.Type == terminal.KEY_RUNE {
+
         e.State = STATE_DIRTY
-        e.Rows[e.Cy] = e.Rows[e.Cy][:e.Cx] + key.Value + e.Rows[e.Cy][e.Cx:]
-        e.Cx++
+
     } else {
         switch key.Value {
+
             case terminal.KeyUp:
-                if e.Cy > 0 {
+                if e.Cy > e.bMinY() {
                     e.Cy--
-                    if e.Cx > len(e.Rows[e.Cy]) {
-                        e.Cx = len(e.Rows[e.Cy])
+                    if e.Cx > e.bMaxX(e.Cy) - 1 {
+                        e.Cx = e.bMaxX(e.Cy) - 1
                     }
                 }
 
             case terminal.KeyDown:
-                if e.Cy < len(e.Rows) - 1 {
+                if e.Cy < e.bMaxY() - 1 {
                     e.Cy++
-                    if e.Cx > len(e.Rows[e.Cy]) {
-                        e.Cx = len(e.Rows[e.Cy])
+                    if e.Cx > e.bMaxX(e.Cy) - 1 {
+                        e.Cx = e.bMaxX(e.Cy) - 1
                     }
                 }
 
+            case terminal.KeyLeft:
+                if e.Cx > e.bMinX(e.Cy) {
+                    e.Cx--
+                }
+
             case terminal.KeyRight:
-                if e.Cx < len(e.Rows[e.Cy]) {
+                if e.Cx < e.bMaxX(e.Cy) - 1 {
                     e.Cx++
                 }
 
-            case terminal.KeyLeft:
-                if e.Cx > 0 {
-                    e.Cx--
-                }
-
-            case terminal.KeyBackspace, terminal.Ascii_BS:
-                if e.Cx > 0 {
-                    e.State = STATE_DIRTY
-                    e.Rows[e.Cy] = e.Rows[e.Cy][:e.Cx-1] + e.Rows[e.Cy][e.Cx:]
-                    e.Cx--
-                } else if len(e.Rows[e.Cy]) == 0 && e.Cy > 0 {
-                    e.State = STATE_DIRTY
-                    e.Rows = append(e.Rows[:e.Cy], e.Rows[e.Cy+1:]...)
-                    e.Cy--
-                    e.Cx = len(e.Rows[e.Cy])
-                }
-
-            case terminal.KeyEnter:
-                e.State = STATE_DIRTY
-                e.Rows = append(e.Rows[:e.Cy+1], e.Rows[e.Cy:]...)
-                e.Rows[e.Cy+1] = e.Rows[e.Cy][e.Cx:]
-                e.Rows[e.Cy] = e.Rows[e.Cy][:e.Cx]
-                e.Cy++
-                e.Cx = 0
-
-            case terminal.KeyDelete:
-                if e.Cx == len(e.Rows[e.Cy]) && e.Cy < len(e.Rows) - 1 {
-                    e.State = STATE_DIRTY
-                    e.Rows[e.Cy] = e.Rows[e.Cy] + e.Rows[e.Cy+1]
-                    e.Rows = append(e.Rows[:e.Cy+1], e.Rows[e.Cy+2:]...)
-                } else if e.Cx < len(e.Rows[e.Cy]) {
-                    e.State = STATE_DIRTY
-                    e.Rows[e.Cy] = e.Rows[e.Cy][:e.Cx] + e.Rows[e.Cy][e.Cx+1:]
-                }
-
             case terminal.KeyHome:
-                e.Cx = 0
+                e.Cx = e.bMinX(e.Cy)
 
             case terminal.KeyEnd:
-                e.Cx = len(e.Rows[e.Cy])
-
-            case terminal.KeyTab:
-                break // TODO
-
-            case terminal.KeyPgUp:
-                break // TODO
-
-            case terminal.KeyPgDn:
-                break // TODO
+                e.Cx = e.bMaxX(e.Cy) - 1
         }
     }
 
     // Adjust vertical offsets.
-    if e.Cy < e.Oy {
-        e.Oy = e.Cy
-    } else if e.Cy > e.Oy + e.W.H - 2 {
-        e.Oy = e.Cy - e.W.H + 2
+    if e.lCy() < e.lMinY() {
+        e.Oy = e.lCy() - e.tMinY()
+    } else if e.lCy() > e.lMaxY() - 1 {
+        e.Oy = e.lCy() - (e.tMaxY() - 1)
     }
 
     // Adjust horizontal offsets.
-    if e.Cx < e.Ox {
-        e.Ox = e.Cx
-    } else if e.Cx > e.Ox + e.W.W - 1 {
-        e.Ox = e.Cx - e.W.W + 1
+    if e.lCx() < e.lMinX(e.Cy) {
+        e.Ox = e.lCx() - e.tMinX(e.Cy)
+    } else if e.lCx() > e.lMaxX(e.Cy) - 1 {
+        // Add 1 character scrolloff to not cut bytes in half.
+        e.Ox = e.lCx() - (e.tMaxX(e.Cy) - 1) + 1
     }
 }
