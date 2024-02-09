@@ -123,17 +123,33 @@ func (e *Editor) Draw() {
             encoded += fmt.Sprintf("%02x ", b)
             if i == 7 { encoded += " " }
             switch {
-                case b < 0x20 || 0x7e < b:
-                    decoded += " "
+
+                // NUL character (or: ␀).
+                case b == 0x00:
+                    decoded += "∅"
+
+                // Whitespace (or: ➤ ␤).
+                case b == 0x09 || b == 0x0a || b == 0x0d:
+                    decoded += "␣"
+
+                // Unprintable ASCII.
+                case b < 0x20 || b == 0x7f:
+                    decoded += "·"
+
+                // Printable ASCII.
                 case 0x20 <= b && b <= 0x7e:
                     decoded += string(b)
+
+                // Non-ASCII.
+                case 0x7f < b:
+                    decoded += "×"
             }
         }
         encoded = fmt.Sprintf("%-49s", encoded)
         loLine = offset + "  " + encoded + " |" + decoded + "|"
 
         // Construct the physical displayed line.
-        phLine := loLine[e.Ox:e.lMaxX(ly)]
+        phLine := string([]rune(loLine)[e.Ox:e.lMaxX(ly)])
         e.W.Print(phLine + "\r\n")
     }
 
@@ -147,8 +163,8 @@ func (e *Editor) Draw() {
         case STATE_SAVING:
             status += " - Save?"
     }
-    if e.W.W > len(status) {
-      status += strings.Repeat(" ", e.W.W - len(status))
+    if e.W.W > len([]rune(status)) {
+      status += strings.Repeat(" ", e.W.W - len([]rune(status)))
     }
     e.W.PrintAt(terminal.AnsiInverse + status[0:e.W.W] + terminal.AnsiInverseReset, e.W.H, 0)
 

@@ -11,7 +11,6 @@ Tasklist
 - [ ] Double cursor on bytes.
 - [ ] Implement byte editing.
 - [ ] Reintroduce file saving.
-- [ ] Unicode output support.
 
 **Short term:**
 
