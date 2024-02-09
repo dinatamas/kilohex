@@ -8,12 +8,14 @@ Tasklist
 
 **Missing:**
 
-- [ ] Display ASCII representation on the right side.
+- [ ] Double cursor on bytes.
 - [ ] Implement byte editing.
 - [ ] Reintroduce file saving.
+- [ ] Unicode output support.
 
 **Short term:**
 
+- [ ] Extra cursor on decoded content.
 - [ ] Preserve original file permissions when writing.
 - [ ] Display current byte position in the current row.
 - [ ] Color different byte classes.

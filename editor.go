@@ -122,9 +122,14 @@ func (e *Editor) Draw() {
         for i, b := range bytes {
             encoded += fmt.Sprintf("%02x ", b)
             if i == 7 { encoded += " " }
+            switch {
+                case b < 0x20 || 0x7e < b:
+                    decoded += " "
+                case 0x20 <= b && b <= 0x7e:
+                    decoded += string(b)
+            }
         }
         encoded = fmt.Sprintf("%-49s", encoded)
-        decoded = "................"
         loLine = offset + "  " + encoded + " |" + decoded + "|"
 
         // Construct the physical displayed line.
