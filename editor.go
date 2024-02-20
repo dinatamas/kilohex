@@ -123,7 +123,6 @@ func (e *Editor) Draw() {
             encoded += fmt.Sprintf("%02x ", b)
             if i == 7 { encoded += " " }
             switch {
-
                 // NUL character (or: ␀).
                 case b == 0x00:
                     decoded += "∅"
@@ -156,7 +155,6 @@ func (e *Editor) Draw() {
     // Draw status bar.
     status := e.Filename
     switch e.State {
-
         case STATE_DIRTY:
             status += "*"
 
@@ -174,7 +172,6 @@ func (e *Editor) Draw() {
 
 func (e *Editor) HandleKey(key terminal.Key) {
     switch e.State {
-
         case STATE_CLEAN:
             switch key.Value {
                 case terminal.KeyCtrlC:
@@ -218,7 +215,6 @@ func (e *Editor) handleEditorKey(key terminal.Key) {
 
     } else {
         switch key.Value {
-
             case terminal.KeyUp:
                 if e.Cy > e.bMinY() {
                     e.Cy--
